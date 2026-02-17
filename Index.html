@@ -1,23 +1,39 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANALOG_HORROR_LOCAL</title>
     <style>
-        body { background: #000; color: #0f0; text-align: center; font-family: monospace; }
-        canvas { border: 2px solid #333; max-width: 100%; margin-top: 10px; display: none; }
-        #controls { margin: 20px; }
-        button { background: #222; color: #0f0; border: 1px solid #0f0; padding: 10px; cursor: pointer; }
-        #status { margin-top: 10px; color: white; }
+        body { 
+            background: #050505; color: #ccc; text-align: center; 
+            font-family: 'Courier New', Courier, monospace; padding: 20px;
+        }
+        .header-box { border: 1px solid #333; padding: 15px; margin-bottom: 20px; background: #0a0a0a; }
+        h2 { color: #800; letter-spacing: 4px; margin: 0; }
+        canvas { border: 2px solid #222; max-width: 100%; display: none; margin-top: 10px; }
+        button { 
+            background: #111; color: #a00; border: 1px solid #a00; 
+            padding: 12px 24px; cursor: pointer; display: none; font-weight: bold;
+        }
+        #status { margin-top: 15px; font-size: 13px; color: #777; }
+        .download-link { 
+            color: #ff0000; text-decoration: none; border: 1px dashed #ff0000; 
+            padding: 10px; display: inline-block; margin-top: 10px;
+        }
     </style>
 </head>
 <body>
 
-    <h2>ANALOG_RECORDER_V1.0</h2>
-    <input type="file" id="picker" accept="image/*">
-    <div id="controls">
-        <button id="recordBtn" style="display:none;">GENERATE GIF (5 SECS)</button>
+    <div class="header-box">
+        <h2>OFFLINE_CORRUPTOR</h2>
+        <p style="font-size: 10px; color: #444;">LOCAL_STORAGE_COMPATIBLE</p>
+        <input type="file" id="picker" accept="image/*">
+        <br><br>
+        <button id="recordBtn">ENCODE_GIF</button>
+        <div id="status">AWAITING_IMAGE...</div>
     </div>
-    <div id="status"></div>
-    
+
     <canvas id="canvas"></canvas>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
@@ -26,67 +42,72 @@
         const picker = document.getElementById('picker');
         const recordBtn = document.getElementById('recordBtn');
         const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const status = document.getElementById('status');
-        
         let img = new Image();
 
         picker.onchange = (e) => {
             const file = e.target.files[0];
+            if (!file) return;
             img.src = URL.createObjectURL(file);
             img.onload = () => {
-                canvas.width = 400; // Standard square horror size
+                canvas.width = 400; // Smaller size for faster local processing
                 canvas.height = 400;
                 canvas.style.display = 'inline-block';
                 recordBtn.style.display = 'inline-block';
-                drawFrame(); // Show preview
+                status.innerText = "READY.";
+                drawFrame(); 
             };
         };
 
         function drawFrame() {
-            // Darken background
+            ctx.filter = "none";
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Add random jitter (The Shake)
-            let jitterX = Math.random() * 4 - 2;
-            let jitterY = Math.random() * 4 - 2;
-
-            // Apply "Scary" Filters
-            ctx.filter = "contrast(1.5) brightness(0.7) grayscale(1)";
-            ctx.drawImage(img, jitterX, jitterY, canvas.width, canvas.height);
             
-            // Draw Scanlines
-            ctx.filter = "none";
-            ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-            for (let i = 0; i < canvas.height; i += 4) {
-                ctx.fillRect(0, i, canvas.width, 2);
+            let jX = Math.floor(Math.random() * 8 - 4);
+            let jY = Math.floor(Math.random() * 8 - 4);
+            
+            ctx.filter = "contrast(200%) brightness(45%) grayscale(100%)";
+            ctx.drawImage(img, jX, jY, canvas.width, canvas.height);
+
+            // Simple glitch slice
+            if (Math.random() > 0.5) {
+                let sY = Math.floor(Math.random() * canvas.height);
+                let sH = Math.floor(Math.random() * 20 + 5);
+                ctx.drawImage(canvas, 0, sY, canvas.width, sH, Math.floor(Math.random()*20-10), sY, canvas.width, sH);
             }
 
-            // Timestamp
-            ctx.fillStyle = "white";
-            ctx.font = "14px Courier New";
-            ctx.fillText("REC 1984.10.31", 20, 380);
+            // CRT Scanlines
+            ctx.filter = "none";
+            ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+            for (let i = 0; i < canvas.height; i += 3) {
+                ctx.fillRect(0, i, canvas.width, 1);
+            }
         }
 
         recordBtn.onclick = () => {
-            status.innerText = "Encoding... Please wait.";
-            const gif = new GIF({ workers: 2, quality: 10 });
+            status.innerText = "PROCESSING... (PLEASE WAIT 3-5 SECONDS)";
+            recordBtn.style.display = 'none';
+            
+            // THE FIX: Set workers to 0 for local/offline support
+            const gif = new GIF({
+                workers: 0, 
+                quality: 20, // Slightly lower quality for faster local rendering
+                width: 400,
+                height: 400
+            });
 
-            // Capture 20 frames for a smooth glitch loop
-            for (let i = 0; i < 20; i++) {
+            // Loop to capture frames
+            for (let i = 0; i < 12; i++) {
                 drawFrame();
-                gif.addFrame(ctx, {copy: true, delay: 100});
+                gif.addFrame(canvas, {copy: true, delay: 100});
             }
 
             gif.on('finished', function(blob) {
                 const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = "horror_glitch.gif";
-                link.innerText = "CLICK HERE TO DOWNLOAD GIF";
-                status.innerHTML = "";
-                status.appendChild(link);
+                status.innerHTML = `<a href="${url}" download="SCARY.gif" class="download-link">[ DOWNLOAD_GIF ]</a>`;
+                recordBtn.style.display = 'inline-block';
             });
 
             gif.render();
