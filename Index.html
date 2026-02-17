@@ -1,106 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>INTERNAL_GIF_ENCODER</title>
+    <title>REALME_HORROR_v8</title>
     <style>
-        body { background: #050505; color: #a00; text-align: center; font-family: monospace; padding: 20px; }
-        .container { border: 1px solid #333; padding: 20px; background: #000; }
-        canvas { border: 2px solid #444; max-width: 100%; display: none; margin-top: 15px; }
-        button { background: #200; color: #f00; border: 1px solid #f00; padding: 15px; cursor: pointer; font-weight: bold; margin-top: 10px; display: none;}
-        #status { margin-top: 10px; color: #666; font-size: 12px; }
-        .download-btn { display: inline-block; margin-top: 15px; color: #fff; background: #600; padding: 10px; text-decoration: none; border-radius: 5px; }
+        body { background: #000; color: #f00; text-align: center; font-family: monospace; }
+        .ui { border: 1px solid #300; padding: 20px; background: #0a0a0a; margin: 10px; }
+        canvas { border: 1px solid #444; max-width: 90%; display: none; }
+        button { background: #400; color: #fff; border: none; padding: 15px; width: 80%; font-weight: bold; margin-top: 10px; display: none; }
+        #status { font-size: 12px; color: #666; margin: 10px; }
+        #downloadArea { margin-top: 20px; }
+        .save-hint { font-size: 10px; color: #888; display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>ANALOG_GIF_MAKER_v7</h2>
+<div class="ui">
+    <h2>ENTITY_PROCESSOR</h2>
     <input type="file" id="picker" accept="image/*">
-    <br>
+    <br><br>
     <canvas id="canvas"></canvas>
     <br>
-    <button id="genBtn">GENERATE_HORROR_GIF</button>
-    <div id="status">SELECT AN IMAGE TO BEGIN</div>
-    <div id="result"></div>
+    <button id="genBtn">CREATE_ANIMATED_GIF</button>
+    <div id="status">WAITING_FOR_IMAGE...</div>
+    <div id="downloadArea"></div>
+    <p class="save-hint" id="hint">Long-press the image above to Save to Gallery</p>
 </div>
 
 <script>
-/* MINI GIF ENCODER (Embedded to avoid security errors)
-   This part handles the GIF creation without external files.
-*/
-const GIFEncoder = function() {
-    let exports = {};
-    let width, height, transparent = null, repeat = 0, delay = 0;
-    let pixels, indexedPixels, colorTab;
-    let out = [];
+// A more robust GIF header for Android 15 Gallery compatibility
+function createGIF(width, height, frames) {
+    let gif = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]; // GIF89a
+    gif.push(width & 0xff, (width >> 8) & 0xff);
+    gif.push(height & 0xff, (height >> 8) & 0xff);
+    gif.push(0x80, 0, 0); // Global Palette
+    gif.push(0, 0, 0, 255, 255, 255); // Black and White
 
-    exports.start = function(w, h) {
-        width = w; height = h; out = [];
-        writeString("GIF89a");
-        writeLSD();
-    };
+    // Netscape loop block (Tells Android it SHOULD loop)
+    gif.push(0x21, 0xff, 0x0b);
+    "NETSCAPE2.0".split("").forEach(c => gif.push(c.charCodeAt(0)));
+    gif.push(0x03, 0x01, 0x00, 0x00, 0x00);
 
-    exports.setDelay = function(ms) { delay = Math.round(ms / 10); };
-    exports.addFrame = function(ctx) {
-        const data = ctx.getImageData(0, 0, width, height).data;
-        pixels = new Uint8Array(width * height * 3);
-        for (let i = 0, j = 0; i < data.length; i += 4, j += 3) {
-            pixels[j] = data[i]; pixels[j+1] = data[i+1]; pixels[j+2] = data[i+2];
-        }
-        analyzePixels();
-        writeGraphicCtrlExt();
-        writeImageDesc();
-        writePixels();
-    };
-
-    exports.finish = function() {
-        out.push(0x3b);
-        return new Blob([new Uint8Array(out)], { type: 'image/gif' });
-    };
-
-    function analyzePixels() {
-        colorTab = [0,0,0, 255,255,255, 255,0,0, 0,255,0, 0,0,255]; // Ultra-simple palette for horror
-        indexedPixels = new Uint8Array(pixels.length / 3);
-        for (let i = 0; i < indexedPixels.length; i++) {
-            let r = pixels[i*3], g = pixels[i*3+1], b = pixels[i*3+2];
-            indexedPixels[i] = (r + g + b > 380) ? 1 : 0; // Simple threshold for B&W horror
-        }
-    }
-
-    function writeString(s) { for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); }
-    function writeShort(s) { out.push(s & 0xff); out.push((s >> 8) & 0xff); }
-    function writeLSD() { writeShort(width); writeShort(height); out.push(0x80, 0, 0); writeColorTable(); }
-    function writeColorTable() { 
-        for(let i=0; i<256; i++) {
-            if(i<2) { let c=i*255; out.push(c,c,c); } else out.push(0,0,0);
-        }
-    }
-    function writeGraphicCtrlExt() { out.push(0x21, 0xf9, 4, 0x04, 0, 0, 0, 0); }
-    function writeImageDesc() { out.push(0x2c); writeShort(0); writeShort(0); writeShort(width); writeShort(height); out.push(0); }
-    function writePixels() {
-        out.push(8); // LZW minimum code size
-        let data = indexedPixels;
+    frames.forEach(pixelData => {
+        gif.push(0x21, 0xf9, 0x04, 0x04, 0x0a, 0x00, 0x00, 0x00); // Graphic Control (100ms delay)
+        gif.push(0x2c, 0, 0, 0, 0); // Image Desc
+        gif.push(width & 0xff, (width >> 8) & 0xff);
+        gif.push(height & 0xff, (height >> 8) & 0xff);
+        gif.push(0); // No local palette
+        
+        gif.push(0x08); // LZW Size
         let i = 0;
-        while(i < data.length) {
-            let blockSize = Math.min(data.length - i, 255);
-            out.push(blockSize);
-            for(let j=0; j<blockSize; j++) out.push(data[i++]);
+        while(i < pixelData.length) {
+            let block = Math.min(pixelData.length - i, 255);
+            gif.push(block);
+            for(let j=0; j<block; j++) gif.push(pixelData[i++]);
         }
-        out.push(0);
-    }
+        gif.push(0x00);
+    });
+    gif.push(0x3b); // Trailer
+    return new Uint8Array(gif);
+}
 
-    return exports;
-};
-
-// UI LOGIC
 const picker = document.getElementById('picker');
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d', {willReadFrequently: true});
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const genBtn = document.getElementById('genBtn');
 const status = document.getElementById('status');
-const resultDiv = document.getElementById('result');
+const downloadArea = document.getElementById('downloadArea');
 let img = new Image();
 
 picker.onchange = (e) => {
@@ -108,45 +75,49 @@ picker.onchange = (e) => {
     if (!file) return;
     img.src = URL.createObjectURL(file);
     img.onload = () => {
-        canvas.width = 300; canvas.height = 300;
+        canvas.width = 250; canvas.height = 250;
         canvas.style.display = 'inline-block';
         genBtn.style.display = 'inline-block';
-        status.innerText = "IMAGE LOADED. READY TO ENCODE.";
-        renderFrame();
+        status.innerText = "READY.";
+        draw();
     };
 };
 
-function renderFrame() {
-    ctx.filter = "contrast(300%) grayscale(100%) brightness(40%)";
+function draw() {
+    ctx.filter = "grayscale(1) contrast(3) brightness(0.4)";
     ctx.fillStyle = "black";
-    ctx.fillRect(0,0,300,300);
-    let jX = Math.floor(Math.random()*10-5);
-    let jY = Math.floor(Math.random()*10-5);
-    ctx.drawImage(img, jX, jY, 300, 300);
-    
-    // Random Scanlines
+    ctx.fillRect(0,0,250,250);
+    ctx.drawImage(img, Math.random()*6-3, Math.random()*6-3, 250, 250);
     ctx.filter = "none";
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    for(let i=0; i<300; i+=4) ctx.fillRect(0, i, 300, 2);
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    for(let i=0; i<250; i+=4) ctx.fillRect(0,i,250,2);
 }
 
 genBtn.onclick = () => {
-    status.innerText = "ENCODING GIF... PLEASE WAIT";
-    const encoder = new GIFEncoder();
-    encoder.start(300, 300);
-    encoder.setDelay(100);
-
-    for(let i=0; i<10; i++) {
-        renderFrame();
-        encoder.addFrame(ctx);
+    status.innerText = "ENCODING...";
+    let frames = [];
+    for(let i=0; i<8; i++) {
+        draw();
+        let data = ctx.getImageData(0,0,250,250).data;
+        let indexed = new Uint8Array(250*250);
+        for(let j=0; j<data.length; j+=4) {
+            indexed[j/4] = (data[j] + data[j+1] + data[j+2] > 300) ? 1 : 0;
+        }
+        frames.push(indexed);
     }
 
-    const blob = encoder.finish();
-    const url = URL.createObjectURL(blob);
-    resultDiv.innerHTML = `<a href="${url}" download="horror.gif" class="download-btn">DOWNLOAD GIF</a>`;
-    status.innerText = "ENCODING COMPLETE.";
+    const gifBytes = createGIF(250, 250, frames);
+    const blob = new Blob([gifBytes], { type: 'image/gif' });
+    const reader = new FileReader();
+    
+    reader.onloadend = function() {
+        // We use an <img> tag so you can long-press to save
+        downloadArea.innerHTML = `<img src="${reader.result}" style="width:250px; border:2px solid #f00;">`;
+        status.innerText = "DONE. LONG-PRESS IMAGE TO SAVE.";
+        document.getElementById('hint').style.display = "block";
+    };
+    reader.readAsDataURL(blob);
 };
 </script>
-
 </body>
 </html>
