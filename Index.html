@@ -3,92 +3,150 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANALOG_HORROR_FIX</title>
+    <title>INTERNAL_GIF_ENCODER</title>
     <style>
-        body { background: #050505; color: #800; text-align: center; font-family: monospace; padding: 20px; }
-        .box { border: 1px solid #333; padding: 20px; background: #000; }
+        body { background: #050505; color: #a00; text-align: center; font-family: monospace; padding: 20px; }
+        .container { border: 1px solid #333; padding: 20px; background: #000; }
         canvas { border: 2px solid #444; max-width: 100%; display: none; margin-top: 15px; }
-        button { 
-            background: #200; color: #f00; border: 1px solid #f00; 
-            padding: 15px; cursor: pointer; font-weight: bold; margin-top: 10px;
-        }
-        #downloadLink { display: none; margin-top: 15px; color: white; text-decoration: underline; }
+        button { background: #200; color: #f00; border: 1px solid #f00; padding: 15px; cursor: pointer; font-weight: bold; margin-top: 10px; display: none;}
+        #status { margin-top: 10px; color: #666; font-size: 12px; }
+        .download-btn { display: inline-block; margin-top: 15px; color: #fff; background: #600; padding: 10px; text-decoration: none; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-    <div class="box">
-        <h2>CORRUPT_IMAGE_v6</h2>
-        <input type="file" id="picker" accept="image/*">
-        <br>
-        <canvas id="canvas"></canvas>
-        <br>
-        <button id="saveBtn" style="display:none;">APPLY_CORRUPTION & SAVE</button>
-        <br>
-        <a id="downloadLink">DOWNLOAD_CORRUPTED_FILE.PNG</a>
-    </div>
+<div class="container">
+    <h2>ANALOG_GIF_MAKER_v7</h2>
+    <input type="file" id="picker" accept="image/*">
+    <br>
+    <canvas id="canvas"></canvas>
+    <br>
+    <button id="genBtn">GENERATE_HORROR_GIF</button>
+    <div id="status">SELECT AN IMAGE TO BEGIN</div>
+    <div id="result"></div>
+</div>
 
-    <script>
-        const picker = document.getElementById('picker');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const saveBtn = document.getElementById('saveBtn');
-        const downloadLink = document.getElementById('downloadLink');
-        let img = new Image();
+<script>
+/* MINI GIF ENCODER (Embedded to avoid security errors)
+   This part handles the GIF creation without external files.
+*/
+const GIFEncoder = function() {
+    let exports = {};
+    let width, height, transparent = null, repeat = 0, delay = 0;
+    let pixels, indexedPixels, colorTab;
+    let out = [];
 
-        picker.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            img.src = URL.createObjectURL(file);
-            img.onload = () => {
-                canvas.width = 600;
-                canvas.height = 600;
-                canvas.style.display = 'inline-block';
-                saveBtn.style.display = 'inline-block';
-                renderHorror();
-            };
-        };
+    exports.start = function(w, h) {
+        width = w; height = h; out = [];
+        writeString("GIF89a");
+        writeLSD();
+    };
 
-        function renderHorror() {
-            // 1. Black base
-            ctx.filter = "none";
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // 2. Heavy Grayscale/Contrast
-            ctx.filter = "contrast(250%) brightness(40%) grayscale(100%)";
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            // 3. Add random "Analog" Glitches
-            ctx.filter = "none";
-            for(let i=0; i<10; i++) {
-                let y = Math.random() * canvas.height;
-                let h = Math.random() * 20;
-                let xShift = (Math.random() - 0.5) * 40;
-                ctx.drawImage(canvas, 0, y, canvas.width, h, xShift, y, canvas.width, h);
-            }
-
-            // 4. Scanlines
-            ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-            for (let i = 0; i < canvas.height; i += 4) {
-                ctx.fillRect(0, i, canvas.width, 2);
-            }
-
-            // 5. Static Noise
-            for (let i = 0; i < 1000; i++) {
-                ctx.fillStyle = "rgba(255,255,255,0.05)";
-                ctx.fillRect(Math.random()*canvas.width, Math.random()*canvas.height, 1, 1);
-            }
+    exports.setDelay = function(ms) { delay = Math.round(ms / 10); };
+    exports.addFrame = function(ctx) {
+        const data = ctx.getImageData(0, 0, width, height).data;
+        pixels = new Uint8Array(width * height * 3);
+        for (let i = 0, j = 0; i < data.length; i += 4, j += 3) {
+            pixels[j] = data[i]; pixels[j+1] = data[i+1]; pixels[j+2] = data[i+2];
         }
+        analyzePixels();
+        writeGraphicCtrlExt();
+        writeImageDesc();
+        writePixels();
+    };
 
-        saveBtn.onclick = () => {
-            renderHorror(); // One last glitch pass
-            const dataUrl = canvas.toDataURL("image/png");
-            downloadLink.href = dataUrl;
-            downloadLink.download = "corrupted_entity.png";
-            downloadLink.style.display = "block";
-            downloadLink.innerText = "[ CLICK_TO_DOWNLOAD_FINAL_IMAGE ]";
-        };
-    </script>
+    exports.finish = function() {
+        out.push(0x3b);
+        return new Blob([new Uint8Array(out)], { type: 'image/gif' });
+    };
+
+    function analyzePixels() {
+        colorTab = [0,0,0, 255,255,255, 255,0,0, 0,255,0, 0,0,255]; // Ultra-simple palette for horror
+        indexedPixels = new Uint8Array(pixels.length / 3);
+        for (let i = 0; i < indexedPixels.length; i++) {
+            let r = pixels[i*3], g = pixels[i*3+1], b = pixels[i*3+2];
+            indexedPixels[i] = (r + g + b > 380) ? 1 : 0; // Simple threshold for B&W horror
+        }
+    }
+
+    function writeString(s) { for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); }
+    function writeShort(s) { out.push(s & 0xff); out.push((s >> 8) & 0xff); }
+    function writeLSD() { writeShort(width); writeShort(height); out.push(0x80, 0, 0); writeColorTable(); }
+    function writeColorTable() { 
+        for(let i=0; i<256; i++) {
+            if(i<2) { let c=i*255; out.push(c,c,c); } else out.push(0,0,0);
+        }
+    }
+    function writeGraphicCtrlExt() { out.push(0x21, 0xf9, 4, 0x04, 0, 0, 0, 0); }
+    function writeImageDesc() { out.push(0x2c); writeShort(0); writeShort(0); writeShort(width); writeShort(height); out.push(0); }
+    function writePixels() {
+        out.push(8); // LZW minimum code size
+        let data = indexedPixels;
+        let i = 0;
+        while(i < data.length) {
+            let blockSize = Math.min(data.length - i, 255);
+            out.push(blockSize);
+            for(let j=0; j<blockSize; j++) out.push(data[i++]);
+        }
+        out.push(0);
+    }
+
+    return exports;
+};
+
+// UI LOGIC
+const picker = document.getElementById('picker');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d', {willReadFrequently: true});
+const genBtn = document.getElementById('genBtn');
+const status = document.getElementById('status');
+const resultDiv = document.getElementById('result');
+let img = new Image();
+
+picker.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+        canvas.width = 300; canvas.height = 300;
+        canvas.style.display = 'inline-block';
+        genBtn.style.display = 'inline-block';
+        status.innerText = "IMAGE LOADED. READY TO ENCODE.";
+        renderFrame();
+    };
+};
+
+function renderFrame() {
+    ctx.filter = "contrast(300%) grayscale(100%) brightness(40%)";
+    ctx.fillStyle = "black";
+    ctx.fillRect(0,0,300,300);
+    let jX = Math.floor(Math.random()*10-5);
+    let jY = Math.floor(Math.random()*10-5);
+    ctx.drawImage(img, jX, jY, 300, 300);
+    
+    // Random Scanlines
+    ctx.filter = "none";
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    for(let i=0; i<300; i+=4) ctx.fillRect(0, i, 300, 2);
+}
+
+genBtn.onclick = () => {
+    status.innerText = "ENCODING GIF... PLEASE WAIT";
+    const encoder = new GIFEncoder();
+    encoder.start(300, 300);
+    encoder.setDelay(100);
+
+    for(let i=0; i<10; i++) {
+        renderFrame();
+        encoder.addFrame(ctx);
+    }
+
+    const blob = encoder.finish();
+    const url = URL.createObjectURL(blob);
+    resultDiv.innerHTML = `<a href="${url}" download="horror.gif" class="download-btn">DOWNLOAD GIF</a>`;
+    status.innerText = "ENCODING COMPLETE.";
+};
+</script>
+
 </body>
 </html>
