@@ -4,57 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { background: #000; color: #f00; text-align: center; font-family: monospace; }
-        .ui { border: 1px solid #333; padding: 15px; background: #0a0a0a; margin: 10px; }
-        canvas { border: 1px solid #444; max-width: 90%; display: none; }
-        button { background: #600; color: #fff; border: 1px solid #f00; padding: 15px; width: 90%; font-weight: bold; margin-top: 10px; }
-        #status { font-size: 11px; color: #666; margin-top: 10px; }
-        img { margin-top: 20px; border: 2px solid #500; max-width: 95%; background: #111; }
+        body { background: #111; color: #fff; text-align: center; font-family: sans-serif; }
+        .ui { border: 2px solid #444; padding: 15px; background: #222; margin: 10px; border-radius: 10px; }
+        canvas { border: 1px solid #555; max-width: 90%; display: none; }
+        button { background: #007bff; color: #fff; border: none; padding: 15px; width: 90%; font-weight: bold; border-radius: 5px; margin-top: 10px; }
+        img { margin-top: 20px; border: 2px solid #007bff; max-width: 90%; }
     </style>
 </head>
 <body>
 
 <div class="ui">
-    <h2>GRAYSCALE_CORRUPTOR_v10</h2>
+    <h2>GIF_SHAKER_FIX</h2>
     <input type="file" id="picker" accept="image/*">
     <br><br>
     <canvas id="canvas"></canvas>
-    <button id="genBtn" style="display:none;">GENERATE_MOTION_GIF</button>
-    <div id="status">AWAITING_SIGNAL...</div>
+    <button id="genBtn" style="display:none;">GENERATE_SHAKY_GIF</button>
     <div id="result"></div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+
 <script>
-// A 256-shade Grayscale GIF Encoder to prevent the "White Screen"
-const createGrayscaleGif = (w, h, frames) => {
-    let gif = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, w&255, w>>8, h&255, h>>8, 0xf7, 0, 0];
-    
-    // Create a 256-color grayscale palette
-    for (let i = 0; i < 256; i++) {
-        gif.push(i, i, i);
-    }
-
-    // Netscape Loop Block
-    gif.push(0x21, 0xff, 0x0b, ...("NETSCAPE2.0".split("").map(c=>c.charCodeAt(0))), 0x03, 0x01, 0, 0, 0);
-    
-    frames.forEach(f => {
-        gif.push(0x21, 0xf9, 0x04, 0x04, 0x08, 0, 0, 0); // 80ms delay
-        gif.push(0x2c, 0, 0, 0, 0, w&255, w>>8, h&255, h>>8, 0, 0x08);
-        for (let i = 0; i < f.length; i += 255) {
-            let chunk = Math.min(f.length - i, 255);
-            gif.push(chunk, ...f.slice(i, i+chunk));
-        }
-        gif.push(0);
-    });
-    gif.push(0x3b);
-    return new Uint8Array(gif);
-};
-
 const picker = document.getElementById('picker');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const genBtn = document.getElementById('genBtn');
-const status = document.getElementById('status');
 const result = document.getElementById('result');
 let img = new Image();
 
@@ -63,64 +37,49 @@ picker.onchange = (e) => {
     if (!file) return;
     img.src = URL.createObjectURL(file);
     img.onload = () => {
-        canvas.width = 256; canvas.height = 256;
+        // Keep it small for mobile speed
+        canvas.width = 300; 
+        canvas.height = 300;
         canvas.style.display = 'inline-block';
         genBtn.style.display = 'inline-block';
-        status.innerText = "IMAGE_READY.";
-        render();
+        draw(0, 0); 
     };
 };
 
-function render() {
-    // 1. Darken and desaturate
-    ctx.filter = "grayscale(1) contrast(150%) brightness(50%)";
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, 256, 256);
+function draw(offsetX, offsetY) {
+    ctx.clearRect(0, 0, 300, 300);
+    // Draw the image with the shake offset
+    ctx.drawImage(img, offsetX, offsetY, 300, 300);
     
-    // 2. THE SHAKE: Random jitter coordinates
-    let shakeX = Math.floor(Math.random() * 14 - 7);
-    let shakeY = Math.floor(Math.random() * 14 - 7);
-    ctx.drawImage(img, shakeX, shakeY, 256, 256);
-    
-    // 3. Random Glitch Slices
-    if (Math.random() > 0.5) {
-        let y = Math.floor(Math.random() * 256);
-        let h = Math.floor(Math.random() * 20 + 5);
-        ctx.drawImage(canvas, 0, y, 256, h, Math.random() * 40 - 20, y, 256, h);
+    // Add a simple "glitch line" occasionally
+    if(Math.random() > 0.7) {
+        let y = Math.random() * 300;
+        ctx.drawImage(canvas, 0, y, 300, 10, Math.random()*20-10, y, 300, 10);
     }
-
-    // 4. CRT Scanlines
-    ctx.filter = "none";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-    for (let i = 0; i < 256; i += 4) ctx.fillRect(0, i, 256, 2);
 }
 
-genBtn.onclick = async () => {
-    status.innerText = "ENCODING_MOTION...";
-    let frames = [];
-    
-    for (let i = 0; i < 12; i++) {
-        render();
-        let d = ctx.getImageData(0, 0, 256, 256).data;
-        let grayPixels = new Uint8Array(256 * 256);
-        
-        for (let j = 0; j < d.length; j += 4) {
-            // Convert to 0-255 grayscale value
-            grayPixels[j/4] = Math.floor((d[j] + d[j+1] + d[j+2]) / 3);
-        }
-        frames.push(grayPixels);
-        await new Promise(r => setTimeout(r, 20));
+genBtn.onclick = () => {
+    const gif = new GIF({
+        workers: 0, // No worker to avoid security errors
+        quality: 10,
+        width: 300,
+        height: 300
+    });
+
+    for (let i = 0; i < 10; i++) {
+        // Create random heavy shake coordinates
+        let sX = Math.floor(Math.random() * 30 - 15);
+        let sY = Math.floor(Math.random() * 30 - 15);
+        draw(sX, sY);
+        gif.addFrame(canvas, {copy: true, delay: 50});
     }
-    
-    const gifBytes = createGrayscaleGif(256, 256, frames);
-    const blob = new Blob([gifBytes], { type: 'image/gif' });
-    const reader = new FileReader();
-    
-    reader.onloadend = function() {
-        result.innerHTML = `<img src="${reader.result}">`;
-        status.innerText = "DONE. LONG-PRESS IMAGE TO SAVE.";
-    };
-    reader.readAsDataURL(blob);
+
+    gif.on('finished', function(blob) {
+        const url = URL.createObjectURL(blob);
+        result.innerHTML = `<p>DONE! Long-press to save:</p><img src="${url}">`;
+    });
+
+    gif.render();
 };
 </script>
 </body>
