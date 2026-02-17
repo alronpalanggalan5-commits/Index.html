@@ -4,35 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { background: #000; color: #f00; text-align: center; font-family: monospace; }
-        .ui { border: 1px solid #222; padding: 20px; background: #0a0a0a; margin: 5px; }
-        canvas { border: 1px solid #444; max-width: 90%; display: none; }
-        button { background: #600; color: #fff; border: none; padding: 15px; width: 90%; font-weight: bold; margin-top: 10px; cursor: pointer; }
-        #status { font-size: 11px; color: #555; margin-top: 10px; }
-        img { margin-top: 20px; border: 2px solid #300; max-width: 90%; }
+        body { background: #000; color: #0f0; text-align: center; font-family: monospace; }
+        .ui { border: 1px solid #030; padding: 15px; background: #050505; margin: 5px; }
+        canvas { border: 1px solid #0f0; max-width: 90%; display: none; }
+        button { background: #030; color: #0f0; border: 1px solid #0f0; padding: 15px; width: 90%; font-weight: bold; margin-top: 10px; }
+        #status { font-size: 11px; color: #0a0; margin-top: 10px; }
+        img { margin-top: 20px; border: 1px solid #0f0; max-width: 90%; background: #222; }
     </style>
 </head>
 <body>
 
 <div class="ui">
-    <h2>ANALOG_CORRUPTOR_A15</h2>
+    <h2>SYSTEM_RECOVERY_v9</h2>
     <input type="file" id="picker" accept="image/*">
     <br><br>
     <canvas id="canvas"></canvas>
-    <button id="genBtn" style="display:none;">GENERATE_ANIMATED_GIF</button>
-    <div id="status">SELECT_INPUT_IMAGE</div>
+    <button id="genBtn" style="display:none;">COMPILE_GIF</button>
+    <div id="status">INPUT_REQUIRED</div>
     <div id="result"></div>
 </div>
 
 <script>
-// Specialized mini-encoder for Android 15 Gallery compatibility
+// Specialized mini-encoder
 const createA15Gif = (w, h, frames) => {
     let gif = [0x47,0x49,0x46,0x38,0x39,0x61, w&255, w>>8, h&255, h>>8, 0x80,0,0, 0,0,0, 255,255,255];
-    // Loop Block
     gif.push(0x21,0xff,0x0b, ...("NETSCAPE2.0".split("").map(c=>c.charCodeAt(0))), 0x03,0x01,0,0,0);
-    
     frames.forEach(f => {
-        gif.push(0x21,0xf9,0x04,0x04,0x07,0,0,0); // 70ms delay
+        gif.push(0x21,0xf9,0x04,0x04,0x07,0,0,0);
         gif.push(0x2c, 0,0,0,0, w&255, w>>8, h&255, h>>8, 0, 0x08);
         for(let i=0; i<f.length; i+=255) {
             let chunk = Math.min(f.length - i, 255);
@@ -51,6 +49,7 @@ const genBtn = document.getElementById('genBtn');
 const status = document.getElementById('status');
 const result = document.getElementById('result');
 let img = new Image();
+let avgBrightness = 128; // Default
 
 picker.onchange = (e) => {
     const file = e.target.files[0];
@@ -60,49 +59,58 @@ picker.onchange = (e) => {
         canvas.width = 256; canvas.height = 256;
         canvas.style.display = 'inline-block';
         genBtn.style.display = 'inline-block';
-        status.innerText = "READY_FOR_ENCODING";
+        status.innerText = "CALIBRATING...";
+        
+        // Analyze brightness to prevent the "White Screen"
+        ctx.drawImage(img, 0, 0, 256, 256);
+        let d = ctx.getImageData(0,0,256,256).data;
+        let sum = 0;
+        for(let i=0; i<d.length; i+=4) sum += (d[i] + d[i+1] + d[i+2]) / 3;
+        avgBrightness = sum / (256 * 256);
+        
+        status.innerText = "READY.";
         draw();
     };
 };
 
 function draw() {
-    ctx.filter = "grayscale(1) contrast(300%) brightness(50%)";
+    ctx.filter = "grayscale(1) contrast(200%) brightness(60%)";
     ctx.fillStyle = "black";
     ctx.fillRect(0,0,256,256);
-    ctx.drawImage(img, Math.random()*10-5, Math.random()*10-5, 256, 256);
+    ctx.drawImage(img, Math.random()*8-4, Math.random()*8-4, 256, 256);
     
-    // Add Tear Glitch
-    if(Math.random() > 0.4) {
+    // Add Glitch
+    if(Math.random() > 0.3) {
         let y = Math.floor(Math.random()*256);
-        ctx.drawImage(canvas, 0, y, 256, 10, Math.random()*20-10, y, 256, 10);
+        ctx.drawImage(canvas, 0, y, 256, 15, Math.random()*30-15, y, 256, 15);
     }
     
     ctx.filter = "none";
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
     for(let i=0; i<256; i+=4) ctx.fillRect(0,i,256,2);
 }
 
 genBtn.onclick = async () => {
-    status.innerText = "CAPTURING_FRAMES...";
+    status.innerText = "ENCODING...";
     let frames = [];
-    for(let i=0; i<10; i++) {
+    for(let i=0; i<12; i++) {
         draw();
         let d = ctx.getImageData(0,0,256,256).data;
         let p = new Uint8Array(256*256);
-        for(let j=0; j<d.length; j+=4) p[j/4] = (d[j]+d[j+1]+d[j+2] > 300) ? 1 : 0;
+        for(let j=0; j<d.length; j+=4) {
+            // Adaptive threshold: compares pixel to the average brightness
+            let val = (d[j]+d[j+1]+d[j+2]) / 3;
+            p[j/4] = (val > avgBrightness) ? 1 : 0;
+        }
         frames.push(p);
-        await new Promise(r => setTimeout(r, 10)); // Prevent browser hang
+        await new Promise(r => setTimeout(r, 20));
     }
     
-    status.innerText = "BUILDING_GIF...";
     const gifBlob = new Blob([createA15Gif(256, 256, frames)], {type:'image/gif'});
     const url = URL.createObjectURL(gifBlob);
     
-    result.innerHTML = `
-        <p style="color:#aaa; font-size:10px;">LONG-PRESS BELOW TO SAVE</p>
-        <img src="${url}">
-    `;
-    status.innerText = "CORRUPTION_COMPLETE";
+    result.innerHTML = `<img src="${url}">`;
+    status.innerText = "DONE. LONG-PRESS TO SAVE.";
 };
 </script>
 </body>
