@@ -3,71 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>REALME_HORROR_v8</title>
     <style>
         body { background: #000; color: #f00; text-align: center; font-family: monospace; }
-        .ui { border: 1px solid #300; padding: 20px; background: #0a0a0a; margin: 10px; }
+        .ui { border: 1px solid #222; padding: 20px; background: #0a0a0a; margin: 5px; }
         canvas { border: 1px solid #444; max-width: 90%; display: none; }
-        button { background: #400; color: #fff; border: none; padding: 15px; width: 80%; font-weight: bold; margin-top: 10px; display: none; }
-        #status { font-size: 12px; color: #666; margin: 10px; }
-        #downloadArea { margin-top: 20px; }
-        .save-hint { font-size: 10px; color: #888; display: none; }
+        button { background: #600; color: #fff; border: none; padding: 15px; width: 90%; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        #status { font-size: 11px; color: #555; margin-top: 10px; }
+        img { margin-top: 20px; border: 2px solid #300; max-width: 90%; }
     </style>
 </head>
 <body>
 
 <div class="ui">
-    <h2>ENTITY_PROCESSOR</h2>
+    <h2>ANALOG_CORRUPTOR_A15</h2>
     <input type="file" id="picker" accept="image/*">
     <br><br>
     <canvas id="canvas"></canvas>
-    <br>
-    <button id="genBtn">CREATE_ANIMATED_GIF</button>
-    <div id="status">WAITING_FOR_IMAGE...</div>
-    <div id="downloadArea"></div>
-    <p class="save-hint" id="hint">Long-press the image above to Save to Gallery</p>
+    <button id="genBtn" style="display:none;">GENERATE_ANIMATED_GIF</button>
+    <div id="status">SELECT_INPUT_IMAGE</div>
+    <div id="result"></div>
 </div>
 
 <script>
-// A more robust GIF header for Android 15 Gallery compatibility
-function createGIF(width, height, frames) {
-    let gif = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]; // GIF89a
-    gif.push(width & 0xff, (width >> 8) & 0xff);
-    gif.push(height & 0xff, (height >> 8) & 0xff);
-    gif.push(0x80, 0, 0); // Global Palette
-    gif.push(0, 0, 0, 255, 255, 255); // Black and White
-
-    // Netscape loop block (Tells Android it SHOULD loop)
-    gif.push(0x21, 0xff, 0x0b);
-    "NETSCAPE2.0".split("").forEach(c => gif.push(c.charCodeAt(0)));
-    gif.push(0x03, 0x01, 0x00, 0x00, 0x00);
-
-    frames.forEach(pixelData => {
-        gif.push(0x21, 0xf9, 0x04, 0x04, 0x0a, 0x00, 0x00, 0x00); // Graphic Control (100ms delay)
-        gif.push(0x2c, 0, 0, 0, 0); // Image Desc
-        gif.push(width & 0xff, (width >> 8) & 0xff);
-        gif.push(height & 0xff, (height >> 8) & 0xff);
-        gif.push(0); // No local palette
-        
-        gif.push(0x08); // LZW Size
-        let i = 0;
-        while(i < pixelData.length) {
-            let block = Math.min(pixelData.length - i, 255);
-            gif.push(block);
-            for(let j=0; j<block; j++) gif.push(pixelData[i++]);
+// Specialized mini-encoder for Android 15 Gallery compatibility
+const createA15Gif = (w, h, frames) => {
+    let gif = [0x47,0x49,0x46,0x38,0x39,0x61, w&255, w>>8, h&255, h>>8, 0x80,0,0, 0,0,0, 255,255,255];
+    // Loop Block
+    gif.push(0x21,0xff,0x0b, ...("NETSCAPE2.0".split("").map(c=>c.charCodeAt(0))), 0x03,0x01,0,0,0);
+    
+    frames.forEach(f => {
+        gif.push(0x21,0xf9,0x04,0x04,0x07,0,0,0); // 70ms delay
+        gif.push(0x2c, 0,0,0,0, w&255, w>>8, h&255, h>>8, 0, 0x08);
+        for(let i=0; i<f.length; i+=255) {
+            let chunk = Math.min(f.length - i, 255);
+            gif.push(chunk, ...f.slice(i, i+chunk));
         }
-        gif.push(0x00);
+        gif.push(0);
     });
-    gif.push(0x3b); // Trailer
+    gif.push(0x3b);
     return new Uint8Array(gif);
-}
+};
 
 const picker = document.getElementById('picker');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const genBtn = document.getElementById('genBtn');
 const status = document.getElementById('status');
-const downloadArea = document.getElementById('downloadArea');
+const result = document.getElementById('result');
 let img = new Image();
 
 picker.onchange = (e) => {
@@ -75,48 +57,52 @@ picker.onchange = (e) => {
     if (!file) return;
     img.src = URL.createObjectURL(file);
     img.onload = () => {
-        canvas.width = 250; canvas.height = 250;
+        canvas.width = 256; canvas.height = 256;
         canvas.style.display = 'inline-block';
         genBtn.style.display = 'inline-block';
-        status.innerText = "READY.";
+        status.innerText = "READY_FOR_ENCODING";
         draw();
     };
 };
 
 function draw() {
-    ctx.filter = "grayscale(1) contrast(3) brightness(0.4)";
+    ctx.filter = "grayscale(1) contrast(300%) brightness(50%)";
     ctx.fillStyle = "black";
-    ctx.fillRect(0,0,250,250);
-    ctx.drawImage(img, Math.random()*6-3, Math.random()*6-3, 250, 250);
+    ctx.fillRect(0,0,256,256);
+    ctx.drawImage(img, Math.random()*10-5, Math.random()*10-5, 256, 256);
+    
+    // Add Tear Glitch
+    if(Math.random() > 0.4) {
+        let y = Math.floor(Math.random()*256);
+        ctx.drawImage(canvas, 0, y, 256, 10, Math.random()*20-10, y, 256, 10);
+    }
+    
     ctx.filter = "none";
-    ctx.fillStyle = "rgba(0,0,0,0.4)";
-    for(let i=0; i<250; i+=4) ctx.fillRect(0,i,250,2);
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    for(let i=0; i<256; i+=4) ctx.fillRect(0,i,256,2);
 }
 
-genBtn.onclick = () => {
-    status.innerText = "ENCODING...";
+genBtn.onclick = async () => {
+    status.innerText = "CAPTURING_FRAMES...";
     let frames = [];
-    for(let i=0; i<8; i++) {
+    for(let i=0; i<10; i++) {
         draw();
-        let data = ctx.getImageData(0,0,250,250).data;
-        let indexed = new Uint8Array(250*250);
-        for(let j=0; j<data.length; j+=4) {
-            indexed[j/4] = (data[j] + data[j+1] + data[j+2] > 300) ? 1 : 0;
-        }
-        frames.push(indexed);
+        let d = ctx.getImageData(0,0,256,256).data;
+        let p = new Uint8Array(256*256);
+        for(let j=0; j<d.length; j+=4) p[j/4] = (d[j]+d[j+1]+d[j+2] > 300) ? 1 : 0;
+        frames.push(p);
+        await new Promise(r => setTimeout(r, 10)); // Prevent browser hang
     }
-
-    const gifBytes = createGIF(250, 250, frames);
-    const blob = new Blob([gifBytes], { type: 'image/gif' });
-    const reader = new FileReader();
     
-    reader.onloadend = function() {
-        // We use an <img> tag so you can long-press to save
-        downloadArea.innerHTML = `<img src="${reader.result}" style="width:250px; border:2px solid #f00;">`;
-        status.innerText = "DONE. LONG-PRESS IMAGE TO SAVE.";
-        document.getElementById('hint').style.display = "block";
-    };
-    reader.readAsDataURL(blob);
+    status.innerText = "BUILDING_GIF...";
+    const gifBlob = new Blob([createA15Gif(256, 256, frames)], {type:'image/gif'});
+    const url = URL.createObjectURL(gifBlob);
+    
+    result.innerHTML = `
+        <p style="color:#aaa; font-size:10px;">LONG-PRESS BELOW TO SAVE</p>
+        <img src="${url}">
+    `;
+    status.innerText = "CORRUPTION_COMPLETE";
 };
 </script>
 </body>
